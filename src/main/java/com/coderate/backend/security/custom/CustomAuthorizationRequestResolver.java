@@ -15,6 +15,7 @@ public class CustomAuthorizationRequestResolver implements OAuth2AuthorizationRe
     public CustomAuthorizationRequestResolver(ClientRegistrationRepository repo, String authorizationRequestBaseUri) {
         this.defaultResolver = new DefaultOAuth2AuthorizationRequestResolver(repo, authorizationRequestBaseUri);
     }
+
     @Override
     public OAuth2AuthorizationRequest resolve(HttpServletRequest request) {
         OAuth2AuthorizationRequest authorizationRequest = defaultResolver.resolve(request);
@@ -26,6 +27,7 @@ public class CustomAuthorizationRequestResolver implements OAuth2AuthorizationRe
         OAuth2AuthorizationRequest authorizationRequest = defaultResolver.resolve(request, clientRegistrationId);
         return customizeAuthorizationRequest(authorizationRequest);
     }
+
     private OAuth2AuthorizationRequest customizeAuthorizationRequest(OAuth2AuthorizationRequest request) {
         if (request == null) {
             return null;

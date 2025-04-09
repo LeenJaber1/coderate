@@ -5,7 +5,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
-@Document(collection = "oauth_login_user")
+@Document(collection = "oauth_token")
 public class OAuth2Refresh {
     @Id
     private String id;

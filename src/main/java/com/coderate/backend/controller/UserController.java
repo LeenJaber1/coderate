@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@RequestMapping("/register")
+@RequestMapping("/user")
 @RestController
 public class UserController {
     @Autowired
@@ -18,12 +18,12 @@ public class UserController {
     private PasswordEncoder passwordEncoder;
 
     @PostMapping("/create")
-    public ResponseEntity<?> createUser(@RequestParam("displayName") String displayName ,
-                                        @RequestParam("username") String username ,
-                                        @RequestParam("email") String email ,
+    public ResponseEntity<?> createUser(@RequestParam("displayName") String displayName,
+                                        @RequestParam("username") String username,
+                                        @RequestParam("email") String email,
                                         @RequestParam("password") String password) throws Exception {
         String hashedPassword = passwordEncoder.encode(password);
-        userService.createUser(displayName, username , hashedPassword , email);
+        userService.createUser(displayName, username, hashedPassword, email);
         return ResponseEntity.ok("User created");
     }
 }

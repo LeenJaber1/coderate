@@ -7,7 +7,6 @@ import com.auth0.jwt.interfaces.JWTVerifier;
 import com.coderate.backend.model.RefreshToken;
 import com.coderate.backend.repository.RefreshTokenRepository;
 import jakarta.annotation.PostConstruct;
-import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,15 +26,16 @@ public class JWTService {
     private String refreshSecret;
 
     @Value("${jwt.refresh.time}")
-    private int refreshTime;
+    private long refreshTime;
 
     @Value("${jwt.access.time}")
-    private int accessTime;
+    private long accessTime;
 
     private Algorithm jwtAccessAlgorithm;
     private Algorithm jwtRefreshAlgorithm;
 
     public JWTService() {
+
     }
 
     @PostConstruct
@@ -44,44 +44,43 @@ public class JWTService {
         jwtRefreshAlgorithm = Algorithm.HMAC256(refreshSecret);
     }
 
-    public String getNewAccessToken(HttpServletRequest request , String username){
+    public String getNewAccessToken(HttpServletRequest request, String username) {
         return JWT.create()
                 .withSubject(username)
-                .withExpiresAt(new Date(System.currentTimeMillis() + getAccessTime()))
+                .withExpiresAt(new Date(System.currentTimeMillis() + accessTime))
                 .withIssuer(request.getRequestURI().toString())
                 .sign(jwtAccessAlgorithm);
     }
 
-    public String getNewRefreshToken(HttpServletRequest request , String username){
+    public String getNewRefreshToken(HttpServletRequest request, String username) {
         RefreshToken refreshToken = new RefreshToken(username);
         refreshTokenRepository.save(refreshToken);
         return JWT.create()
                 .withSubject(username)
-                .withExpiresAt(new Date(System.currentTimeMillis()+ getRefreshTime()))
+                .withExpiresAt(new Date(System.currentTimeMillis() + refreshTime))
                 .withIssuer(request.getRequestURI().toString())
-                .withClaim("id" , refreshToken.getId())
+                .withClaim("id", refreshToken.getId())
                 .sign(jwtRefreshAlgorithm);
 
     }
-    public void deleteRefreshToken(String token){
-        try{
+
+    public void deleteRefreshToken(String token) {
+        try {
             JWT.require(jwtRefreshAlgorithm).build().verify(token);
             String id = JWT.decode(token).getClaim("id").asString();
             refreshTokenRepository.deleteById(id);
-        }
-        catch (Exception e){
+        } catch (Exception e) {
             e.getMessage();
         }
 
     }
 
-    public boolean validateRefreshToken(String token){
-        try{
+    public boolean validateRefreshToken(String token) {
+        try {
             JWT.require(jwtRefreshAlgorithm).build().verify(token);
             String id = JWT.decode(token).getClaim("id").asString();
             return refreshTokenRepository.findById(id).isPresent();
-        }
-        catch (Exception e){
+        } catch (Exception e) {
             return false;
         }
 
@@ -92,13 +91,5 @@ public class JWTService {
         return verifier.verify(token);
     }
 
-    public int getRefreshTime() {
-        return this.refreshTime * 60 * 1000;
-    }
-
-
-    public int getAccessTime() {
-        return this.accessTime;
-    }
 
 }

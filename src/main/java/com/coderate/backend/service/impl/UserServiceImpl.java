@@ -5,10 +5,8 @@ import com.coderate.backend.model.User;
 import com.coderate.backend.repository.UserRepository;
 import com.coderate.backend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
-
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -23,7 +21,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public User getUserByEmail(String email) throws Exception{
+    public User getUserByEmail(String email) throws Exception {
         return this.userRepository.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException("User doesn't exist"));
     }
 
@@ -34,29 +32,35 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void createUser(String displayName, String username, String password, String email) throws UserAlreadyExists {
-        if(userRepository.findByEmail(email).isPresent() || userRepository.findByUsername(username).isPresent()){
+        if (userRepository.findByEmail(email).isPresent() || userRepository.findByUsername(username).isPresent()) {
             throw new UserAlreadyExists("user already exists");
         }
         //do this method before creating user
         //String hashedPassword = passwordEncoder.encode(password);
-        User user = new User(displayName, username , password , email);
+        User user = new User(displayName, username, password, email);
+        userRepository.save(user);
+    }
+
+    @Override
+    public void createUser(String displayName, String username, String email) {
+        User user = new User(displayName, username, email);
         userRepository.save(user);
     }
 
     @Override
     public void updateUser(String username, User user) throws UserAlreadyExists {
         User actualUser = this.getUserByUsername(username);
-        if(user.getDisplayName() != null && !actualUser.getDisplayName().equals(user.getDisplayName())){
+        if (user.getDisplayName() != null && !actualUser.getDisplayName().equals(user.getDisplayName())) {
             actualUser.setDisplayName(user.getDisplayName());
         }
-        if(user.getUsername() != null && !actualUser.getUsername().equals(user.getUsername())){
-            if(userRepository.findByUsername(user.getUsername()).isPresent()){
+        if (user.getUsername() != null && !actualUser.getUsername().equals(user.getUsername())) {
+            if (userRepository.findByUsername(user.getUsername()).isPresent()) {
                 throw new UserAlreadyExists("username already exists");
             }
             actualUser.setUsername(user.getUsername());
         }
-        if(user.getEmail() != null && !actualUser.getEmail().equals(user.getEmail())){
-            if(userRepository.findByEmail(user.getEmail()).isPresent()){
+        if (user.getEmail() != null && !actualUser.getEmail().equals(user.getEmail())) {
+            if (userRepository.findByEmail(user.getEmail()).isPresent()) {
                 throw new UserAlreadyExists("email already exists");
             }
             actualUser.setEmail(user.getEmail());

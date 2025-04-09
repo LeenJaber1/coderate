@@ -3,11 +3,11 @@ package com.coderate.backend.security.custom;
 import com.coderate.backend.model.OAuth2Refresh;
 import com.coderate.backend.repository.OAuth2RefreshTokenRepository;
 import com.coderate.backend.security.config.OAuth2Config;
+import com.coderate.backend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
-
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
@@ -23,11 +23,13 @@ public class CustomOAuth2ClientService implements OAuth2AuthorizedClientService 
     private OAuth2RefreshTokenRepository tokenRepository;
     @Autowired
     private OAuth2Config config;
+    @Autowired
+    private UserService userService;
 
     @Override
     public <T extends OAuth2AuthorizedClient> T loadAuthorizedClient(String clientRegistrationId, String principalName) {
-        OAuth2Refresh token = tokenRepository.findByUserIdAndRegistrationId(principalName , clientRegistrationId).orElse(null);
-        if(token == null){
+        OAuth2Refresh token = tokenRepository.findByUserIdAndRegistrationId(principalName, clientRegistrationId).orElse(null);
+        if (token == null) {
             return null;
         }
         OAuth2AuthorizedClient authorizedClient = toOAuth2AuthorizedClient(token);
@@ -49,39 +51,32 @@ public class CustomOAuth2ClientService implements OAuth2AuthorizedClientService 
             String email = oauthUser.getAttribute("email");
             String name = oauthUser.getAttribute("name");
 
+
             // Check if token already exists
-            tokenRepository.findByUserIdAndRegistrationId(principal.getName(), authorizedClient.getClientRegistration().getRegistrationId())
-                    .ifPresentOrElse(
-                            existingToken -> {
-                                // Update existing token if needed
-                                existingToken.setAccessToken(authorizedClient.getAccessToken().getTokenValue());
-                                if (authorizedClient.getRefreshToken() != null) {
-                                    existingToken.setRefreshToken(authorizedClient.getRefreshToken().getTokenValue());
-                                }
-                                existingToken.setAccessTokenExpiresAt(authorizedClient.getAccessToken().getExpiresAt());
-                                tokenRepository.save(existingToken);
-                            },
-                            () -> {
-                                // Create new token with user info
-                                OAuth2Refresh token = new OAuth2Refresh();
-                                token.setUserId(principal.getName());
-                                token.setRegistrationId(authorizedClient.getClientRegistration().getRegistrationId());
-                                token.setAccessToken(authorizedClient.getAccessToken().getTokenValue());
+            OAuth2Refresh token = tokenRepository.findByUserIdAndRegistrationId(principal.getName(), authorizedClient.getClientRegistration().getRegistrationId()).orElse(null);
+            if (token != null) {
+                token.setAccessToken(authorizedClient.getAccessToken().getTokenValue());
+                if (authorizedClient.getRefreshToken() != null) {
+                    token.setRefreshToken(authorizedClient.getRefreshToken().getTokenValue());
+                }
+                token.setAccessTokenExpiresAt(authorizedClient.getAccessToken().getExpiresAt());
+                tokenRepository.save(token);
+            } else {
+                token = new OAuth2Refresh();
+                token.setUserId(principal.getName());
+                token.setRegistrationId(authorizedClient.getClientRegistration().getRegistrationId());
+                token.setAccessToken(authorizedClient.getAccessToken().getTokenValue());
 
-                                if (authorizedClient.getRefreshToken() != null) {
-                                    token.setRefreshToken(authorizedClient.getRefreshToken().getTokenValue());
-                                }
-
-                                token.setAccessTokenExpiresAt(authorizedClient.getAccessToken().getExpiresAt());
-                                token.setCreatedAt(Instant.now());
-
-                                // Set user info
-                                token.setEmail(email);
-                                token.setName(name);
-
-                                tokenRepository.save(token);
-                            }
-                    );
+                if (authorizedClient.getRefreshToken() != null) {
+                    token.setRefreshToken(authorizedClient.getRefreshToken().getTokenValue());
+                    token.setAccessTokenExpiresAt(authorizedClient.getAccessToken().getExpiresAt());
+                    token.setCreatedAt(Instant.now());
+                    token.setEmail(email);
+                    token.setName(name);
+                    tokenRepository.save(token);
+                    userService.createUser(name, email, name.replaceAll("\\s", ""));
+                }
+            }
         }
     }
 
@@ -95,7 +90,6 @@ public class CustomOAuth2ClientService implements OAuth2AuthorizedClientService 
         ClientRegistration clientRegistration =
                 config.getClientRegistration(token.getRegistrationId());
 
-        // Rest of your conversion logic
         OAuth2AccessToken accessToken = new OAuth2AccessToken(
                 OAuth2AccessToken.TokenType.BEARER,
                 token.getAccessToken(),

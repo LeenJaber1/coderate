@@ -7,5 +7,6 @@ import java.util.Optional;
 
 public interface OAuth2RefreshTokenRepository extends MongoRepository<OAuth2Refresh, String> {
     Optional<OAuth2Refresh> findByUserIdAndRegistrationId(String userId, String registrationId);
+
     void deleteByUserIdAndRegistrationId(String userId, String registrationId);
 }

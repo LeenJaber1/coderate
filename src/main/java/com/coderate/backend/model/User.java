@@ -34,6 +34,12 @@ public class User implements UserDetails {
         this.authorities = new HashSet<>();
     }
 
+    public User(String displayName, String username, String email) {
+        this.displayName = displayName;
+        this.username = username;
+        this.email = email;
+    }
+
     public String getDisplayName() {
         return displayName;
     }
@@ -50,14 +56,6 @@ public class User implements UserDetails {
         this.id = id;
     }
 
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
     public String getEmail() {
         return email;
     }
@@ -65,11 +63,6 @@ public class User implements UserDetails {
     public void setEmail(String email) {
         this.email = email;
     }
-
-    public void setAuthorities(Set<Authorities> authorities) {
-        this.authorities = authorities;
-    }
-
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -79,13 +72,25 @@ public class User implements UserDetails {
                 .collect(Collectors.toSet());
     }
 
+    public void setAuthorities(Set<Authorities> authorities) {
+        this.authorities = authorities;
+    }
+
     @Override
     public String getPassword() {
         return this.password;
     }
 
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
     @Override
     public String getUsername() {
         return this.username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
     }
 }
