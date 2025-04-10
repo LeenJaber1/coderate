@@ -1,5 +1,6 @@
 package com.coderate.backend.model;
 
+import com.coderate.backend.enums.AuthType;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -8,12 +9,14 @@ public class RefreshToken {
     @Id
     private String id;
     private String username;
+    private AuthType loginType;
 
     public RefreshToken() {
     }
 
-    public RefreshToken(String username) {
+    public RefreshToken(String username, AuthType authType) {
         this.username = username;
+        this.loginType = authType;
     }
 
     public String getId() {
@@ -30,6 +33,14 @@ public class RefreshToken {
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public AuthType getLoginType() {
+        return loginType;
+    }
+
+    public void setLoginType(AuthType loginType) {
+        this.loginType = loginType;
     }
 }
 

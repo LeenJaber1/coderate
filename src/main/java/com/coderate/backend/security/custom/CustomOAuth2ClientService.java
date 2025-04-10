@@ -74,7 +74,7 @@ public class CustomOAuth2ClientService implements OAuth2AuthorizedClientService 
                     token.setEmail(email);
                     token.setName(name);
                     tokenRepository.save(token);
-                    userService.createUser(name, email, name.replaceAll("\\s", ""));
+                    userService.createUser(name, email, email);
                 }
             }
         }

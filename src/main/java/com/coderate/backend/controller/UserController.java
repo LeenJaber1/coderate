@@ -4,10 +4,7 @@ import com.coderate.backend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RequestMapping("/user")
 @RestController
@@ -25,5 +22,10 @@ public class UserController {
         String hashedPassword = passwordEncoder.encode(password);
         userService.createUser(displayName, username, hashedPassword, email);
         return ResponseEntity.ok("User created");
+    }
+
+    @GetMapping("/")
+    public String test(){
+        return "success";
     }
 }

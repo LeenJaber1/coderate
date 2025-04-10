@@ -38,6 +38,7 @@ public class User implements UserDetails {
         this.displayName = displayName;
         this.username = username;
         this.email = email;
+        this.authorities = new HashSet<>();
     }
 
     public String getDisplayName() {

@@ -1,9 +1,6 @@
 package com.coderate.backend.security.config;
 
-import com.coderate.backend.security.custom.CustomAuthorizationRequestResolver;
-import com.coderate.backend.security.custom.CustomJwtFilter;
-import com.coderate.backend.security.custom.CustomOAuth2ClientService;
-import com.coderate.backend.security.custom.CustomOnSuccessHandler;
+import com.coderate.backend.security.custom.*;
 import com.coderate.backend.service.UserService;
 import com.coderate.backend.util.JWTService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,12 +12,17 @@ import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
+import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter;
 
 import java.util.Collections;
@@ -84,19 +86,33 @@ public class SecurityConfig {
     }
 
     @Bean
+    public AuthorizationRequestRepository<OAuth2AuthorizationRequest> authorizationRequestRepository() {
+        return new HttpSessionOAuth2AuthorizationRequestRepository();
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         OAuth2AuthorizationRequestResolver customResolver =
                 new CustomAuthorizationRequestResolver(clientRegistrationRepository, "/oauth2/authorization");
 
         return http
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests((authorize) -> authorize
-                        .requestMatchers("/user/**", "/login", "/auth/**").permitAll()
+                        .requestMatchers("/user/create", "/login", "/auth/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2Login(oauth2 -> oauth2
-                        .authorizationEndpoint(authorization ->
-                                authorization.authorizationRequestResolver(customResolver))
-                        .authorizedClientService(customOAuth2ClientService))
+                        .authorizationEndpoint(authorization -> authorization
+                                .authorizationRequestResolver(customResolver)
+                                .authorizationRequestRepository(authorizationRequestRepository())
+                        )
+                        .successHandler(new CustomOAuth2SuccessHandler(jwtService))
+                        .authorizedClientService(customOAuth2ClientService)
+                )
+
+
                 .addFilterBefore(customDAOFilter(), SecurityContextHolderAwareRequestFilter.class)
                 .addFilterBefore(customJwtFilter(), customDAOFilter().getClass())
                 .build();

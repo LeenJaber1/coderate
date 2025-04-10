@@ -4,6 +4,7 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.auth0.jwt.interfaces.JWTVerifier;
+import com.coderate.backend.enums.AuthType;
 import com.coderate.backend.model.RefreshToken;
 import com.coderate.backend.repository.RefreshTokenRepository;
 import jakarta.annotation.PostConstruct;
@@ -52,8 +53,8 @@ public class JWTService {
                 .sign(jwtAccessAlgorithm);
     }
 
-    public String getNewRefreshToken(HttpServletRequest request, String username) {
-        RefreshToken refreshToken = new RefreshToken(username);
+    public String getNewRefreshToken(HttpServletRequest request, String username, AuthType authType) {
+        RefreshToken refreshToken = new RefreshToken(username, authType);
         refreshTokenRepository.save(refreshToken);
         return JWT.create()
                 .withSubject(username)
@@ -83,12 +84,26 @@ public class JWTService {
         } catch (Exception e) {
             return false;
         }
-
     }
 
     public DecodedJWT getDecodedJWT(String token) {
         JWTVerifier verifier = JWT.require(jwtAccessAlgorithm).build();
         return verifier.verify(token);
+    }
+
+    public AuthType authType(String refreshToken){
+        try {
+            JWT.require(jwtRefreshAlgorithm).build().verify(refreshToken);
+            String id = JWT.decode(refreshToken).getClaim("id").asString();
+            RefreshToken refreshToken1 = refreshTokenRepository.findById(id).orElse(null);
+            if(refreshToken1 != null){
+                return refreshToken1.getLoginType();
+            }
+            return null;
+        }
+        catch (Exception e){
+            return null;
+        }
     }
 
 
