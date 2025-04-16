@@ -1,6 +1,7 @@
 package com.coderate.backend.service.impl;
 
 import com.coderate.backend.exceptions.UserAlreadyExists;
+import com.coderate.backend.model.Project;
 import com.coderate.backend.model.User;
 import com.coderate.backend.repository.UserRepository;
 import com.coderate.backend.service.UserService;
@@ -8,6 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -66,5 +70,18 @@ public class UserServiceImpl implements UserService {
             actualUser.setEmail(user.getEmail());
         }
         userRepository.save(actualUser);
+    }
+
+    @Override
+    public List<Project> getProjects(String username) {
+        User user = getUserByUsername(username);
+        return user.getProjects().stream().collect(Collectors.toList());
+    }
+
+    @Override
+    public void addProject(Project project, String username) {
+        User user = getUserByUsername(username);
+        user.getProjects().add(project);
+        this.userRepository.save(user);
     }
 }

@@ -51,6 +51,7 @@ public class AuthController {
             else if(authType == AuthType.OAUTH){
                 try {
                     String email = JWT.decode(refreshToken).getSubject();
+                    jwtService.deleteRefreshToken(refreshToken);
                     String googleRefreshToken = googleTokenService.getRefreshToken(email);
                     String googleAccessToken = getNewGoogleAccessToken(googleRefreshToken);
                     googleTokenService.setAccessToken(email, googleAccessToken);

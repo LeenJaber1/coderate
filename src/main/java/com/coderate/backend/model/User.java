@@ -9,6 +9,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -21,7 +22,7 @@ public class User implements UserDetails {
     private String password;
     private String email;
     private Set<Authorities> authorities;
-    //private Set<Project> projects;
+    private Set<Project> projects;
 
     public User() {
     }
@@ -93,5 +94,26 @@ public class User implements UserDetails {
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public Set<Project> getProjects() {
+        return projects;
+    }
+
+    public void setProjects(Set<Project> projects) {
+        this.projects = projects;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        User user = (User) o;
+        return Objects.equals(id, user.id) && Objects.equals(displayName, user.displayName) && Objects.equals(username, user.username) && Objects.equals(password, user.password) && Objects.equals(email, user.email) && Objects.equals(authorities, user.authorities) && Objects.equals(projects, user.projects);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, displayName, username, password, email, authorities, projects);
     }
 }
