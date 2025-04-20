@@ -17,7 +17,7 @@ public interface UserService extends UserDetailsService {
 
     void updateUser(String username, User user) throws Exception;
 
-    List<Project> getProjects(String username);
+    List<String>  getProjects(String username);
 
     void addProject(Project project , String username);
 }

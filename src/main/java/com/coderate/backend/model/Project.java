@@ -6,7 +6,9 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Document(collection = "projects")
@@ -14,31 +16,38 @@ public class Project {
     @Id
     private String id;
     private String projectName;
-    // user id as key
-    // set and add users after project creation
     @DBRef
     private User owner;
     private Map<String , Role> usersRoles;
-    @DBRef
-    private Directory directory;
     private ProgramLanguage language;
-    private int currentVersion;
-    private int versions;
+    @DBRef
+    private Version currentVersion;
+    private Map<String , Integer> versionUserOn;
+    private int latestVersion;
     @DBRef
     private Project forkedFrom;
+    private String mainDirectoryId;
 
     public Project(String projectName, ProgramLanguage language, User owner) {
         this.projectName = projectName;
         this.language = language;
-        this.currentVersion = 1;
-        this.versions = 1;
+        this.owner = owner;
+        this.usersRoles = new HashMap<>();
+        this.versionUserOn = new HashMap<>();
+        this.usersRoles.put(owner.getId() , Role.OWNER);
+        this.latestVersion = 0;
+    }
+
+    public Project(User owner) {
         this.owner = owner;
         this.usersRoles = new HashMap<>();
         this.usersRoles.put(owner.getId() , Role.OWNER);
+        this.versionUserOn = new HashMap<>();
     }
 
     public Project() {
         this.usersRoles = new HashMap<>();
+        this.versionUserOn = new HashMap<>();
     }
 
     public String getId() {
@@ -65,13 +74,6 @@ public class Project {
         this.usersRoles = usersRoles;
     }
 
-    public Directory getDirectory() {
-        return directory;
-    }
-
-    public void setDirectory(Directory directory) {
-        this.directory = directory;
-    }
 
     public ProgramLanguage getLanguage() {
         return language;
@@ -81,21 +83,6 @@ public class Project {
         this.language = language;
     }
 
-    public int getCurrentVersion() {
-        return currentVersion;
-    }
-
-    public void setCurrentVersion(int currentVersion) {
-        this.currentVersion = currentVersion;
-    }
-
-    public int getVersions() {
-        return versions;
-    }
-
-    public void setVersions(int versions) {
-        this.versions = versions;
-    }
 
     public User getOwner() {
         return owner;
@@ -111,5 +98,38 @@ public class Project {
 
     public void setForkedFrom(Project forkedFrom) {
         this.forkedFrom = forkedFrom;
+    }
+
+    public Version getCurrentVersion() {
+        return currentVersion;
+    }
+
+    public void setCurrentVersion(Version currentVersion) {
+        this.currentVersion = currentVersion;
+    }
+
+    public Map<String, Integer> getVersionUserOn() {
+        return versionUserOn;
+    }
+
+    public void setVersionUserOn(Map<String, Integer> versionUserOn) {
+        this.versionUserOn = versionUserOn;
+    }
+
+
+    public int getLatestVersion() {
+        return latestVersion;
+    }
+
+    public void setLatestVersion(int latestVersion) {
+        this.latestVersion = latestVersion;
+    }
+
+    public String getMainDirectoryId() {
+        return mainDirectoryId;
+    }
+
+    public void setMainDirectoryId(String mainDirectoryId) {
+        this.mainDirectoryId = mainDirectoryId;
     }
 }

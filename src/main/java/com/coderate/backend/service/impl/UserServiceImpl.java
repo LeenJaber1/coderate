@@ -73,7 +73,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<Project> getProjects(String username) {
+    public List<String> getProjects(String username) {
         User user = getUserByUsername(username);
         return user.getProjects().stream().collect(Collectors.toList());
     }
@@ -81,7 +81,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public void addProject(Project project, String username) {
         User user = getUserByUsername(username);
-        user.getProjects().add(project);
+        user.getProjects().add(project.getId());
         this.userRepository.save(user);
     }
 }

@@ -1,54 +1,69 @@
 package com.coderate.backend.service.impl;
 
+import com.coderate.backend.dto.ProjectStructure;
 import com.coderate.backend.enums.ProgramLanguage;
 import com.coderate.backend.enums.Role;
 import com.coderate.backend.enums.State;
-import com.coderate.backend.exceptions.NotAuthorizedException;
-import com.coderate.backend.exceptions.ProjectNotFoundException;
-import com.coderate.backend.model.Directory;
-import com.coderate.backend.model.File;
-import com.coderate.backend.model.Project;
-import com.coderate.backend.model.User;
+import com.coderate.backend.exceptions.*;
+import com.coderate.backend.model.*;
 import com.coderate.backend.repository.ProjectRepository;
-import com.coderate.backend.service.DirectoryService;
-import com.coderate.backend.service.FileService;
+import com.coderate.backend.response.ConflictResponse;
 import com.coderate.backend.service.ProjectService;
+import com.coderate.backend.service.StorageStructureService;
 import com.coderate.backend.service.UserService;
-import org.springframework.security.core.userdetails.UserDetails;
+import com.coderate.backend.service.VersionService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
 public class ProjectServiceImpl implements ProjectService {
     private ProjectRepository projectRepository;
-    private FileService fileService;
-    private DirectoryService directoryService;
     private UserService userService;
+    private StorageStructureService storageStructureService;
+    private VersionService versionService;
 
-    public ProjectServiceImpl(ProjectRepository projectRepository, FileService fileService, DirectoryService directoryService, UserService userService) {
+    public ProjectServiceImpl(ProjectRepository projectRepository, UserService userService,
+                              StorageStructureService storageStructureService, VersionService versionService) {
         this.projectRepository = projectRepository;
-        this.directoryService = directoryService;
-        this.fileService = fileService;
         this.userService = userService;
+        this.versionService = versionService;
+        this.storageStructureService = storageStructureService;
     }
 
 
+    @Transactional
     @Override
-    public Project createProject(String projectName, ProgramLanguage language, User owner) {
-        Project project = new Project(projectName , language, owner);
-        Directory directory = this.directoryService.createDirectory(owner, project.getCurrentVersion());
-        project.setDirectory(directory);
+    public Project createProject(String projectName, ProgramLanguage language, User owner) throws DirectoryNotFoundException {
+        Project project = new Project(projectName, language, owner);
         this.projectRepository.save(project);
-        directory.setProject(project);
-        this.directoryService.saveDirectory(directory);
+        Version version = this.versionService.createNewVersion(null , owner.getId(), project.getId(), 1);
+        version.setRoot(true);
+        this.versionService.saveVersion(version);
+        Directory mainDirectory = this.storageStructureService.createDirectory(1 , version.getId() , projectName + '\\' , project.getId(),
+                owner.getId(), "" , true);
+        project.setCurrentVersion(version);
+        project.getVersionUserOn().put(owner.getId(), version.getVersionNumber());
+        project.setMainDirectoryId(mainDirectory.getId());
+        updateNewVersion(project);
         return project;
     }
 
+    @Transactional
+    private void updateNewVersion(Project project){
+        project.setLatestVersion(project.getLatestVersion() + 1);
+        this.projectRepository.save(project);
+    }
+
+    @Transactional
     @Override
     public void changeProjectName(String newName, String projectId, User owner) throws ProjectNotFoundException, NotAuthorizedException {
         Project project = getProjectById(projectId);
@@ -64,67 +79,15 @@ public class ProjectServiceImpl implements ProjectService {
         return this.projectRepository.findById(projectId).orElseThrow(() -> new ProjectNotFoundException("project not found"));
     }
 
+    @Transactional
     @Override
-    public Project changeProjectVersion(int version, String projectId) throws ProjectNotFoundException {
-        Project project = getProjectById(projectId);
-        List<Directory> directories = this.directoryService.getDirectoriesByProjectId(projectId);
-        List<Directory> deletedDirectories = new ArrayList<>();
-        for(Directory directory : directories){
-            if(directory.getVersionState().get(version)!= State.DELETED){
-                List<File> files = this.fileService.getFilesByDirectoryIdAndVersion(directory.getId(), version)
-                        .stream()
-                        .filter(file -> file.getState() != State.DELETED)
-                        .collect(Collectors.toList());;
-                directory.setFiles(files);
-                this.directoryService.saveDirectory(directory);
-            }
-            else{
-                deletedDirectories.add(directory);
-            }
-        }
-        removeDeletedDirectories(deletedDirectories, project.getDirectory());
-
-        return null;
-    }
-
-    private void removeDeletedDirectories(List<Directory> deletedDirectories, Directory mainDirectory) {
-        for (Directory directory : mainDirectory.getSubDirectories()){
-            if(deletedDirectories.contains(directory)){
-                removeDeletedDirectories(deletedDirectories, directory);
-                this.directoryService.deleteSubDirectory(directory, mainDirectory);
-            }
-        }
-    }
-
-    @Override
-    public void addUserRole(User user, Role role, User ownerAdmin, Project project) throws NotAuthorizedException {
-        if(!project.getOwner().getId().equals(ownerAdmin.getId()) && project.getUsersRoles().get(ownerAdmin)!= Role.ADMIN){
+    public void addUserRole(String userId, Role role, User ownerAdmin, Project project) throws NotAuthorizedException {
+        if(!project.getOwner().getId().equals(ownerAdmin.getId()) && project.getUsersRoles().get(ownerAdmin.getId())!= Role.ADMIN){
             throw new NotAuthorizedException("not authorized to add users");
         }
-        project.getUsersRoles().put(user.getUsername() , role);
+        project.getUsersRoles().put(userId , role);
+        project.getVersionUserOn().put(userId, project.getCurrentVersion().getVersionNumber());
         this.projectRepository.save(project);
-    }
-
-    @Override
-    public void addNewFileToDirectory(String projectId, File file, Directory directory) {
-
-    }
-
-    @Override
-    public void addNewDirectory(String projectId, Directory directory, Directory parentDirectory) {
-
-    }
-
-    @Override
-    public List<UserDetails> getUsersByRole(Project project, Role role) {
-        return project.getUsersRoles().entrySet().stream()
-                .filter(entry -> entry.getValue() == role)
-                .map(Map.Entry::getKey)
-                .map(userId -> {
-                    return userService.loadUserByUsername(userId);
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
     }
 
     @Override
@@ -133,38 +96,158 @@ public class ProjectServiceImpl implements ProjectService {
         return project.getOwner();
     }
 
+    @Transactional
     @Override
     public void deleteProject(String projectId, User user) throws ProjectNotFoundException, NotAuthorizedException {
         Project project = getProjectById(projectId);
         if(!project.getOwner().getId().equals(user.getId())){
             throw new NotAuthorizedException("Not authorized to delete project");
         }
-        deleteFiles(project.getDirectory());
-        this.directoryService.deleteDirectory(project.getDirectory());
+        this.storageStructureService.deleteProjectStorage(projectId);
         this.projectRepository.delete(project);
+        this.versionService.deleteVersion(projectId);
     }
 
-    private void deleteFiles(Directory directory){
-        for(File file : directory.getFiles()){
-            this.fileService.deleteFile(file);
-        }
-        for(Directory directory1 : directory.getSubDirectories()){
-            deleteFiles(directory1);
-            this.directoryService.deleteDirectory(directory1);
-        }
-    }
 
+    @Transactional
     @Override
-    public void removeUserRole(User user, User ownerAdmin, Project project) throws NotAuthorizedException {
-        if(!project.getOwner().getId().equals(ownerAdmin.getId()) && project.getUsersRoles().get(ownerAdmin)!= Role.ADMIN){
-            throw new NotAuthorizedException("not authorized to add users");
+    public void removeUserRole(String user, User ownerAdmin, Project project) throws NotAuthorizedException {
+        if(!project.getOwner().getId().equals(ownerAdmin.getId()) && project.getUsersRoles().get(ownerAdmin.getId())!= Role.ADMIN){
+            throw new NotAuthorizedException("not authorized to remove users");
         }
         project.getUsersRoles().remove(user);
         this.projectRepository.save(project);
     }
 
+
     @Override
-    public Project forkProject(String projectId, User user) throws ProjectNotFoundException {
+    public ProjectStructure changeVersion(int versionNumber, String projectId, String userId) throws ProjectNotFoundException, VersionNotFoundException {
+        Project project = getProjectById(projectId);
+        project.getVersionUserOn().put(userId , versionNumber);
+        this.projectRepository.save(project);
+        return this.storageStructureService.getProjectStructure(projectId , project.getLatestVersion());
+    }
+
+    @Override
+    public ProjectStructure getVersion(int versionNumber, String projectId) {
+        return this.storageStructureService.getVersionChanges(projectId , versionNumber);
+    }
+
+    @Transactional
+    @Override
+    public ProjectStructure changeProjectVersion(int version, String projectId, String userId) throws VersionNotFoundException, ProjectNotFoundException, NotAuthorizedException {
+        Project project = getProjectById(projectId);
+        if(!project.getOwner().getId().equals(userId) && project.getUsersRoles().get(userId)!= Role.ADMIN){
+            throw new NotAuthorizedException("not authorized to change project version");
+        }
+        Version targetVersion = this.versionService.getVersionByVersionNumber(version , projectId);
+        project.setCurrentVersion(targetVersion);
+        this.projectRepository.save(project);
+        return this.storageStructureService.getProjectStructure(projectId , project.getLatestVersion());
+    }
+
+    @Transactional
+    @Override
+    public ConflictResponse saveVersion(String userId, String projectId, String message , ProjectStructure newProjectStructure) throws ProjectNotFoundException, VersionNotFoundException, NotAuthorizedException, DirectoryNotFoundException, FileAlreadyExistsException {
+        Project project = getProjectById(projectId);
+        // get only the files that changed
+        ProjectStructure latestVersionStructure = getVersion(project.getLatestVersion() , projectId);
+        Version parentVersion = this.versionService.getVersionByVersionNumber(project.getVersionUserOn().get(userId) , projectId);
+
+        ConflictResponse conflictResponse = checkForMergeConflictsWithLatestVersion(parentVersion , latestVersionStructure, newProjectStructure);
+        if(!conflictResponse.getFileConflictLines().isEmpty() || !conflictResponse.getStatesThatDiffer().isEmpty()){
+            return conflictResponse;
+        }
+
+        updateNewVersion(project);
+        Version newVersion = this.versionService.createNewVersion(project.getCurrentVersion(), userId,  projectId, project.getLatestVersion());
+        // get the merged files stuff
+        this.storageStructureService.saveVersionUpdates(newProjectStructure, newVersion, projectId , userId, latestVersionStructure ,parentVersion);
+
+        newVersion.setMessage(message);
+        project.setCurrentVersion(newVersion);
+        this.versionService.saveVersion(newVersion);
+        this.projectRepository.save(project);
+
+        return conflictResponse;
+    }
+
+    // if changed the same line etc.
+    // case 1:
+    // get the files that changed in the newChange request and compare them with parent version to see what lines changed in those files
+    // take those same files in the latest version structure and compare them with the files in the parent version and see what lines changed
+    // if same lines changed then conflict occurred, if no merge two files
+    // case 2:
+    // if a file is deleted in one of the versions but the other no (or a directory)
+    private ConflictResponse checkForMergeConflictsWithLatestVersion(Version parentVersion , ProjectStructure latestStructure , ProjectStructure newChanges) throws VersionNotFoundException {
+        Map<String, List<String>> fileLinesMap = this.storageStructureService.findLatestFilesVersion(parentVersion.getProjectId() , parentVersion.getVersionNumber())
+                .stream()
+                .filter(file -> file.getState() != State.DELETED)
+                .collect(Collectors.toMap(
+                        File::getPath,
+                        File::getLines
+                ));
+
+
+        ConflictResponse conflictResponse = new ConflictResponse();
+        Map<String , String> fileConflictLines = conflictResponse.getFileConflictLines();
+        Map<String , List<State>>  statesThatDiffer = conflictResponse.getStatesThatDiffer();
+
+        checkForStates(latestStructure , newChanges , statesThatDiffer);
+
+        checkForLineConflicts(latestStructure , newChanges , fileLinesMap , fileConflictLines);
+        return  conflictResponse;
+    }
+
+    private void checkForLineConflicts(ProjectStructure latestStructure, ProjectStructure newChanges, Map<String, List<String>> fileLinesMap,
+                                       Map<String , String> fileConflictLines) {
+        for(Map.Entry<String , List<String>> entry : fileLinesMap.entrySet()){
+            String filePath = entry.getKey();
+            if(latestStructure.getFilesContents().containsKey(filePath) && newChanges.getFilesContents().containsKey(filePath)){
+                String conflict = this.storageStructureService.checkForMergeConflictsForFiles(entry.getValue() , newChanges.getFilesContents().get(filePath),
+                        latestStructure.getFilesContents().get(entry.getKey()));
+                if(!conflict.isEmpty()){
+                    fileConflictLines.put(filePath , conflict);
+                }
+            }
+        }
+    }
+
+    private void checkForStates(ProjectStructure latestStructure, ProjectStructure newChanges, Map<String , List<State>> statesThatDiffer) {
+        checkDirectoriesState(latestStructure , newChanges , statesThatDiffer);
+        checkFilesState(latestStructure , newChanges, statesThatDiffer);
+    }
+
+    private void checkFilesState(ProjectStructure latestStructure, ProjectStructure newChanges, Map<String , List<State>>  statesThatDiffer) {
+        for(Map.Entry<String, State> entry : latestStructure.getFilesState().entrySet()){
+            if((entry.getValue() == State.NEW || entry.getValue() == State.MODIFIED) && newChanges.getFilesState().get(entry.getKey()) == State.DELETED){
+                statesThatDiffer.put(entry.getKey(), List.of(entry.getValue(), State.DELETED));
+            }
+        }
+
+        for(Map.Entry<String, State> entry : newChanges.getFilesState().entrySet()){
+            if((entry.getValue() == State.NEW || entry.getValue() == State.MODIFIED) && latestStructure.getFilesState().get(entry.getKey()) == State.DELETED){
+                statesThatDiffer.put(entry.getKey(), List.of(entry.getValue(), State.DELETED));
+            }
+        }
+    }
+
+    private void checkDirectoriesState(ProjectStructure latestStructure, ProjectStructure newChanges, Map<String , List<State>>  statesThatDiffer) {
+        for(Map.Entry<String, State> entry : latestStructure.getDirectoriesState().entrySet()){
+            if(entry.getValue() == State.NEW  && newChanges.getDirectoriesState().get(entry.getKey()) == State.DELETED){
+                statesThatDiffer.put(entry.getKey(), List.of(entry.getValue(), State.DELETED));
+            }
+        }
+
+        for(Map.Entry<String, State> entry : newChanges.getDirectoriesState().entrySet()){
+            if(entry.getValue() == State.NEW  && latestStructure.getDirectoriesState().get(entry.getKey()) == State.DELETED){
+                statesThatDiffer.put(entry.getKey(), List.of(entry.getValue(), State.DELETED));
+            }
+        }
+    }
+
+    @Override
+    public Project forkProject(String projectId, User user) throws ProjectNotFoundException, FileAlreadyExistsException, DirectoryNotFoundException {
         Project project = getProjectById(projectId);
         Project forkedProject = new Project();
         forkedProject.setForkedFrom(project);
@@ -175,7 +258,7 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    public Project cloneProject(String projectId, User user) throws ProjectNotFoundException {
+    public Project cloneProject(String projectId, User user) throws ProjectNotFoundException, FileAlreadyExistsException, DirectoryNotFoundException {
         Project project = getProjectById(projectId);
         Project clone = new Project();
         copyProjectMetaData(project, clone, user);
@@ -184,36 +267,60 @@ public class ProjectServiceImpl implements ProjectService {
         return clone;
     }
 
-    private void copyProjectFiles(Project originalProject , Project clonedProject){
-        Directory newDirectory = new Directory(clonedProject.getOwner() ,clonedProject.getCurrentVersion());
-        clonedProject.setDirectory(newDirectory);
-        newDirectory.setProject(clonedProject);
-        copyDirectoriesAndFiles(originalProject.getDirectory(), newDirectory, clonedProject);
-    }
-
-    private void copyDirectoriesAndFiles(Directory originalDirectory, Directory clonedDirectory, Project clonedProject){
-        for(File file : originalDirectory.getFiles()){
-            File newFile = new File(file.getLines(), 1 , clonedProject.getOwner(), file.getFilePath(), clonedProject, clonedDirectory);
-            clonedDirectory.getFiles().add(newFile);
-            this.fileService.saveFile(file);
-        }
-        for(Directory directory : originalDirectory.getSubDirectories()){
-            Directory newDirectory = new Directory(clonedProject.getOwner(), clonedProject.getCurrentVersion());
-            clonedDirectory.getSubDirectories().add(newDirectory);
-            newDirectory.setProject(clonedProject);
-            copyDirectoriesAndFiles(directory, newDirectory, clonedProject);
-            this.directoryService.saveDirectory(newDirectory);
-        }
-        this.directoryService.saveDirectory(clonedDirectory);
-    }
-
     private void copyProjectMetaData(Project original , Project clone, User user){
         clone.setProjectName(original.getProjectName() + " (Copy)");
         clone.setOwner(user);
-        clone.setCurrentVersion(1);
-        clone.setVersions(1);
         clone.getUsersRoles().put(user.getUsername(), Role.OWNER);
-        user.getProjects().add(clone);
+        this.userService.addProject(clone , user.getId());
+    }
+
+    private void copyProjectFiles(Project originalProject , Project clonedProject) throws DirectoryNotFoundException, FileAlreadyExistsException {
+        int latestVersion = originalProject.getLatestVersion();
+        String projectId = originalProject.getId();
+
+        List<File> latestFiles = this.storageStructureService.findLatestFilesVersion(projectId , latestVersion).stream()
+                .filter(file -> file.getState() != State.DELETED)
+                .toList();
+
+        List<Directory> latestDirectories = this.storageStructureService.findLatestDirectoriesVersion(projectId , latestVersion).stream()
+                .filter(directory -> directory.getState() != State.DELETED)
+                .sorted(Comparator.comparingInt(d -> d.getPath().length()))
+                .collect(Collectors.toList());
+
+        Map<String, String> directoriesId = new HashMap<>();
+        Directory mainDirectory = this.storageStructureService.getDirectoryById(clonedProject.getMainDirectoryId());
+
+        // copy all directories from the old project to the new project by creating new ones
+        createCopyDirectories(latestDirectories , clonedProject, clonedProject.getMainDirectoryId() , directoriesId , mainDirectory.getPath());
+
+        createCopyFiles(latestFiles , clonedProject , directoriesId);
+    }
+
+    private void createCopyFiles(List<File> latestFiles, Project clonedProject, Map<String, String> directoriesId) throws FileAlreadyExistsException, DirectoryNotFoundException {
+        for(File file : latestFiles){
+            Path filePath = Paths.get(file.getPath());
+            Path parentDirectory = filePath.getParent();
+            if(directoriesId.containsKey(parentDirectory.toString())){
+                File newFile = this.storageStructureService.createFile(clonedProject.getLatestVersion(),  clonedProject.getCurrentVersion().getId(),
+                        file.getPath(), clonedProject.getOwner().getId(), directoriesId.get(parentDirectory.toString()),
+                        clonedProject.getId(), file.getLines());
+            }
+        }
+    }
+
+    private void createCopyDirectories(List<Directory> latestDirectories, Project project, String mainDirectoryId, Map<String, String> directoriesId , String parentPath) throws DirectoryNotFoundException {
+        for(Directory directory : latestDirectories){
+            Path subDirectoryPath = Paths.get(directory.getPath());
+            Path parent = subDirectoryPath.getParent();
+            if(parent.toString().equals(parentPath)){
+                Directory newDirectory = this.storageStructureService.createDirectory(project.getLatestVersion(), project.getCurrentVersion().getId(),
+                        directory.getPath(), project.getId(), project.getOwner().getId() , mainDirectoryId, false);
+
+
+                directoriesId.put(newDirectory.getPath() , newDirectory.getId());
+                createCopyDirectories(latestDirectories, project , newDirectory.getId(), directoriesId , newDirectory.getPath());
+            }
+        }
     }
 
 

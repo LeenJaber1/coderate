@@ -22,7 +22,7 @@ public class User implements UserDetails {
     private String password;
     private String email;
     private Set<Authorities> authorities;
-    private Set<Project> projects;
+    private Set<String> projectsId;
 
     public User() {
     }
@@ -96,12 +96,12 @@ public class User implements UserDetails {
         this.username = username;
     }
 
-    public Set<Project> getProjects() {
-        return projects;
+    public Set<String> getProjects() {
+        return projectsId;
     }
 
-    public void setProjects(Set<Project> projects) {
-        this.projects = projects;
+    public void setProjects(Set<String> projects) {
+        this.projectsId = projects;
     }
 
     @Override
@@ -109,11 +109,11 @@ public class User implements UserDetails {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         User user = (User) o;
-        return Objects.equals(id, user.id) && Objects.equals(displayName, user.displayName) && Objects.equals(username, user.username) && Objects.equals(password, user.password) && Objects.equals(email, user.email) && Objects.equals(authorities, user.authorities) && Objects.equals(projects, user.projects);
+        return Objects.equals(id, user.id) && Objects.equals(displayName, user.displayName) && Objects.equals(username, user.username) && Objects.equals(password, user.password) && Objects.equals(email, user.email) && Objects.equals(authorities, user.authorities) && Objects.equals(projectsId, user.projectsId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, displayName, username, password, email, authorities, projects);
+        return Objects.hash(id, displayName, username, password, email, authorities, projectsId);
     }
 }
