@@ -1,6 +1,7 @@
 package com.coderate.backend.service;
 
 import com.coderate.backend.dto.ProjectStructure;
+import com.coderate.backend.enums.MessageType;
 import com.coderate.backend.exceptions.DirectoryNotFoundException;
 import com.coderate.backend.exceptions.FileNotFoundException;
 import com.coderate.backend.model.Directory;

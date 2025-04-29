@@ -1,8 +1,10 @@
 package com.coderate.backend.controller;
 
+import com.coderate.backend.model.User;
 import com.coderate.backend.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,5 +29,10 @@ public class UserController {
     @GetMapping("/")
     public String test(){
         return "success";
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal User loginUser) {
+        return ResponseEntity.ok(loginUser);
     }
 }

@@ -24,20 +24,19 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
     @Autowired
-    private CustomOAuth2ClientService customOAuth2ClientService;
-
-    @Autowired
     private UserService userService;
-
-    @Autowired
-    private ClientRegistrationRepository clientRegistrationRepository;
 
     @Autowired
     private JWTService jwtService;
@@ -56,17 +55,18 @@ public class SecurityConfig {
         return new ProviderManager(Collections.singletonList(authenticationProvider()));
     }
 
-//    @Bean
-//    public CorsConfigurationSource corsConfigurationSource() {
-//        CorsConfiguration configuration = new CorsConfiguration();
-//        configuration.setAllowedOrigins(Arrays.asList("*"));
-//        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE"));
-//        configuration.addAllowedHeader("*");
-//        configuration.setExposedHeaders(List.of("Content-Range"));
-//        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-//        source.registerCorsConfiguration("/**", configuration);
-//        return source;
-//    }
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE"));
+        configuration.addAllowedHeader("*");
+        configuration.setExposedHeaders(List.of("Content-Range"));
+        configuration.setAllowCredentials(true);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -86,32 +86,16 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthorizationRequestRepository<OAuth2AuthorizationRequest> authorizationRequestRepository() {
-        return new HttpSessionOAuth2AuthorizationRequestRepository();
-    }
-
-    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        OAuth2AuthorizationRequestResolver customResolver =
-                new CustomAuthorizationRequestResolver(clientRegistrationRepository, "/oauth2/authorization");
-
         return http
+                .cors(httpSecurityCorsConfigurer -> httpSecurityCorsConfigurer.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                 )
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests((authorize) -> authorize
-                        .requestMatchers("/user/create", "/login", "/auth/**").permitAll()
+                        .requestMatchers("/user/create", "/login", "/api/auth/**").permitAll()
                         .anyRequest().authenticated())
-                .oauth2Login(oauth2 -> oauth2
-                        .authorizationEndpoint(authorization -> authorization
-                                .authorizationRequestResolver(customResolver)
-                                .authorizationRequestRepository(authorizationRequestRepository())
-                        )
-                        .successHandler(new CustomOAuth2SuccessHandler(jwtService))
-                        .authorizedClientService(customOAuth2ClientService)
-                )
-
 
                 .addFilterBefore(customDAOFilter(), SecurityContextHolderAwareRequestFilter.class)
                 .addFilterBefore(customJwtFilter(), customDAOFilter().getClass())

@@ -12,8 +12,10 @@ import com.coderate.backend.model.User;
 import com.coderate.backend.response.ConflictResponse;
 
 import java.nio.file.FileAlreadyExistsException;
+import java.util.List;
 
 public interface ProjectService {
+    boolean canEnterSessions(String projectId , String userId) throws ProjectNotFoundException;
     Project createProject(String projectName, ProgramLanguage language, User owner) throws DirectoryNotFoundException;
 
     void changeProjectName(String newName , String projectId, User owner) throws ProjectNotFoundException, NotAuthorizedException;
@@ -43,4 +45,6 @@ public interface ProjectService {
     Project forkProject(String projectId, User user) throws ProjectNotFoundException, FileAlreadyExistsException, DirectoryNotFoundException;
 
     Project cloneProject(String projectId , User user) throws ProjectNotFoundException, FileAlreadyExistsException, DirectoryNotFoundException;
+
+    List<Project> getProjectsByUserId(String userId);
 }

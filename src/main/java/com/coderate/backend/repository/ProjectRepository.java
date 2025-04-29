@@ -10,4 +10,7 @@ import java.util.List;
 public interface ProjectRepository extends MongoRepository<Project , String> {
     @Query("{ 'owner.$id' : ?0 }")
     List<Project> findByUserId(String userId);
+
+    @Query("{ 'usersRoles.?0' : { $exists: true } }")
+    List<Project> findByUserIdInUsersRoles(String userId);
 }

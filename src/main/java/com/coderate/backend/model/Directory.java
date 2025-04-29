@@ -17,10 +17,10 @@ public class Directory extends AbstractStorageStructure{
     }
 
     public boolean isMain() {
-        return isMain;
+        return this.isMain;
     }
 
     public void setMain(boolean main) {
-        isMain = main;
+        this.isMain = main;
     }
 }

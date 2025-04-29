@@ -12,6 +12,7 @@ public class ProjectStructure {
     private Map<String, List<String>> filesContents;
     private LinkedHashMap<String, State> directoriesState;
     private Map<String, State> filesState;
+    private String projectName ;
 
     public ProjectStructure() {
         this.filesContents = new HashMap<>();
@@ -62,5 +63,13 @@ public class ProjectStructure {
 
     public void setDirectoriesState(LinkedHashMap<String, State> directoriesState) {
         this.directoriesState = directoriesState;
+    }
+
+    public String getProjectName() {
+        return projectName;
+    }
+
+    public void setProjectName(String projectName) {
+        this.projectName = projectName;
     }
 }

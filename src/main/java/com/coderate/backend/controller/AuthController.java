@@ -2,9 +2,13 @@ package com.coderate.backend.controller;
 
 import com.auth0.jwt.JWT;
 import com.coderate.backend.enums.AuthType;
-import com.coderate.backend.security.GoogleProperties;
-import com.coderate.backend.util.GoogleTokenService;
+import com.coderate.backend.model.User;
+import com.coderate.backend.service.UserService;
 import com.coderate.backend.util.JWTService;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -14,54 +18,104 @@ import org.springframework.lang.NonNull;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/api/auth")
 public class AuthController {
     private JWTService jwtService;
 
-    private GoogleProperties googleProperties;
 
-    private GoogleTokenService googleTokenService;
+    @Value("${google.client-id}")
+    private String clientId;
 
-    public AuthController(JWTService jwtService, GoogleProperties googleProperties, GoogleTokenService googleTokenService) {
+    @Value("${google.client-secret}")
+    private String clientSecret;
+
+    @Value("${google.redirect-uri}")
+    private String redirectUri;
+
+    private UserService userService;
+
+
+    public AuthController(JWTService jwtService, UserService userService) {
         this.jwtService = jwtService;
-        this.googleProperties = googleProperties;
-        this.googleTokenService = googleTokenService;
+        this.userService = userService;
     }
+
+    @PostMapping("/google")
+    public ResponseEntity<?> exchangeCode(
+            @RequestBody Map<String, String> body,
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        try {
+            String code = body.get("code");
+            if (code == null || code.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Authorization code missing"));
+            }
+
+            // Exchange code for tokens
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+            MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+            params.add("code", code);
+            params.add("client_id", clientId);
+            params.add("client_secret", clientSecret);
+            params.add("redirect_uri", redirectUri);
+            params.add("grant_type", "authorization_code");
+
+            HttpEntity<MultiValueMap<String, String>> tokenRequest = new HttpEntity<>(params, headers);
+            ResponseEntity<Map> tokenResponse = restTemplate.postForEntity("https://oauth2.googleapis.com/token", tokenRequest, Map.class);
+
+            if (!tokenResponse.getStatusCode().is2xxSuccessful()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Failed to get tokens from Google"));
+            }
+
+            String idToken = (String) tokenResponse.getBody().get("id_token");
+            GoogleIdToken.Payload payload = verifyIdToken(idToken);
+
+            String email = payload.getEmail();
+            String name = (String) payload.get("name");
+
+            // Create or fetch user
+            this.userService.createUser(name , email , email);
+
+            // Generate your own app tokens
+            String accessToken = jwtService.getNewAccessToken(request, email);
+            String refreshToken = jwtService.getNewRefreshToken(request, email, AuthType.OAUTH);
+
+            // Set tokens in secure HttpOnly cookies
+            response.addCookie(createCookie("accessToken", accessToken, 7 * 24 * 60 * 60));
+            response.addCookie(createCookie("refreshToken", refreshToken, 30 * 24 * 60 * 60));
+
+            return ResponseEntity.ok(Map.of("message", "Login successful"));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
+        }
+    }
+
 
     @PostMapping("/refresh-token")
     public ResponseEntity<?> refreshToken(HttpServletRequest request, HttpServletResponse response) throws Exception {
         String refreshToken = getRefreshTokenValue(request, "refreshToken");
 
         if (refreshToken != null && jwtService.validateRefreshToken(refreshToken)) {
-            AuthType authType = jwtService.authType(refreshToken);
-            if(authType == AuthType.NORMAL){
-                String username = JWT.decode(refreshToken).getSubject();
-                String newAccessToken = jwtService.getNewAccessToken(request, username);
-                jwtService.deleteRefreshToken(refreshToken);
-                Cookie accessTokenCookie = createCookie("accessToken", newAccessToken, 7 * 24 * 60 * 60);
-                response.addCookie(accessTokenCookie);
-            }
-            else if(authType == AuthType.OAUTH){
-                try {
-                    String email = JWT.decode(refreshToken).getSubject();
-                    jwtService.deleteRefreshToken(refreshToken);
-                    String googleRefreshToken = googleTokenService.getRefreshToken(email);
-                    String googleAccessToken = getNewGoogleAccessToken(googleRefreshToken);
-                    googleTokenService.setAccessToken(email, googleAccessToken);
-                }
-                catch (Exception e){
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                            .body("Expired Refresh Token");
-                }
-
-            }
+            String username = JWT.decode(refreshToken).getSubject();
+            String newAccessToken = jwtService.getNewAccessToken(request, username);
+            jwtService.deleteRefreshToken(refreshToken);
+            Cookie accessTokenCookie = createCookie("accessToken", newAccessToken, 7 * 24 * 60 * 60);
+            response.addCookie(accessTokenCookie);
             return ResponseEntity.ok("ok");
         } else {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -105,27 +159,20 @@ public class AuthController {
         return null;
     }
 
-    public String getNewGoogleAccessToken(String refreshToken) {
-        String tokenUrl = "https://oauth2.googleapis.com/token";
+    private GoogleIdToken.Payload verifyIdToken(String idTokenString) throws Exception {
+        NetHttpTransport transport = new NetHttpTransport();
+        GsonFactory jsonFactory = new GsonFactory();
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        System.out.println("Using client_id: " + googleProperties.getId());
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("client_id", googleProperties.getId());
-        body.add("client_secret", googleProperties.getSecret());
-        body.add("refresh_token", refreshToken);
-        body.add("grant_type", "refresh_token");
+        GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(transport, jsonFactory)
+                .setAudience(Collections.singletonList(clientId))
+                .build();
 
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
-
-        RestTemplate restTemplate = new RestTemplate();
-        ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, request, Map.class);
-
-        if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-            return (String) response.getBody().get("access_token");
+        GoogleIdToken idToken = verifier.verify(idTokenString);
+        if (idToken != null) {
+            return idToken.getPayload();
+        } else {
+            throw new Exception("Invalid ID token");
         }
-
-        throw new RuntimeException("Failed to get access token: " + response.getStatusCode());
     }
+
 }

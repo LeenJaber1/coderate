@@ -28,7 +28,7 @@ public abstract class AbstractStorageStructure {
     }
 
     public String getId() {
-        return id;
+        return this.id;
     }
 
     public void setId(String id) {
@@ -36,7 +36,7 @@ public abstract class AbstractStorageStructure {
     }
 
     public int getVersion() {
-        return versionNumber;
+        return this.versionNumber;
     }
 
     public void setVersion(int version) {
@@ -44,7 +44,7 @@ public abstract class AbstractStorageStructure {
     }
 
     public String getVersionId() {
-        return versionId;
+        return this.versionId;
     }
 
     public void setVersionId(String versionId) {
@@ -52,7 +52,7 @@ public abstract class AbstractStorageStructure {
     }
 
     public String getPath() {
-        return path;
+        return this.path;
     }
 
     public void setPath(String path) {
@@ -60,7 +60,7 @@ public abstract class AbstractStorageStructure {
     }
 
     public String getUserId() {
-        return userId;
+        return this.userId;
     }
 
     public void setUserId(String userId) {
@@ -68,7 +68,7 @@ public abstract class AbstractStorageStructure {
     }
 
     public String getParentDirectoryId() {
-        return parentDirectoryId;
+        return this.parentDirectoryId;
     }
 
     public void setParentDirectoryId(String parentDirectoryId) {
@@ -76,7 +76,7 @@ public abstract class AbstractStorageStructure {
     }
 
     public State getState() {
-        return state;
+        return this.state;
     }
 
     public void setState(State state) {
@@ -84,7 +84,7 @@ public abstract class AbstractStorageStructure {
     }
 
     public String getProjectId() {
-        return projectId;
+        return this.projectId;
     }
 
     public void setProjectId(String projectId) {

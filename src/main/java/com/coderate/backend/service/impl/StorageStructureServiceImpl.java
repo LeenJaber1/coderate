@@ -1,6 +1,7 @@
 package com.coderate.backend.service.impl;
 
 import com.coderate.backend.dto.ProjectStructure;
+import com.coderate.backend.enums.MessageType;
 import com.coderate.backend.enums.State;
 import com.coderate.backend.exceptions.DirectoryNotFoundException;
 import com.coderate.backend.exceptions.FileNotFoundException;
@@ -32,27 +33,25 @@ public class StorageStructureServiceImpl implements StorageStructureService {
         this.versionService = versionService;
     }
 
+    @Transactional
     @Override
     public File createFile(int versionNumber, String versionId, String path, String userId, String parentDirectoryId, String projectId, List<String> lines) throws DirectoryNotFoundException, FileAlreadyExistsException {
-        Directory parentDirectory = this.directoryRepository.findById(parentDirectoryId).orElseThrow(() -> new DirectoryNotFoundException("directory not found"));
-        if(this.fileRepository.findByPathAndProjectIdAndVersionNumber(parentDirectory.getPath() + path , projectId, versionNumber).isPresent()){
+        if(this.fileRepository.findByPathAndProjectIdAndVersionNumber(path , projectId, versionNumber).isPresent()){
             throw new FileAlreadyExistsException("file already exists");
         }
-        File file = new File(versionNumber , versionId , parentDirectory.getPath() + path , userId , parentDirectoryId , State.NEW , projectId);
+        Path path1 = Paths.get(path);
+        File file = new File(versionNumber , versionId , path1.toString(), userId , parentDirectoryId , State.NEW , projectId);
         file.setLines(lines);
         this.fileRepository.save(file);
         return file;
     }
 
 
+    @Transactional
     @Override
     public Directory createDirectory(int versionNumber, String versionId, String path, String projectId, String userId, String parentDirectoryId, boolean isMain) throws DirectoryNotFoundException {
-        String parentDirectoryPath = "";
-        if(!isMain){
-            Directory parentDirectory = this.directoryRepository.findById(parentDirectoryId).orElseThrow(() -> new DirectoryNotFoundException("directory not found"));
-            parentDirectoryPath = parentDirectory.getPath();
-        }
-        Directory newDirectory = new Directory(versionNumber , versionId , parentDirectoryPath + path + '\\' , projectId, userId , parentDirectoryId , State.NEW, isMain);
+        Path path1 = Paths.get(path);
+        Directory newDirectory = new Directory(versionNumber , versionId , path1.toString() +  "\\", projectId, userId , parentDirectoryId , State.NEW, isMain);
         this.directoryRepository.save(newDirectory);
         return newDirectory;
     }
@@ -87,6 +86,7 @@ public class StorageStructureServiceImpl implements StorageStructureService {
         this.directoryRepository.delete(deletedDirectory);
     }
 
+
     @Override
     public List<Directory> findLatestDirectoriesVersion(String projectId, Integer version){
         return this.directoryRepository.findLatestVersionDirectoriesInProject(projectId , version);
@@ -98,6 +98,7 @@ public class StorageStructureServiceImpl implements StorageStructureService {
     }
 
     // take the new changes
+    @Transactional
     @Override
     public void saveVersionUpdates(ProjectStructure newProjectStructure, Version latestVersion, String projectId, String userId, ProjectStructure latestProjectStructure , Version parentVersion) throws DirectoryNotFoundException, FileAlreadyExistsException {
         LinkedHashMap<String, State> directoriesState = newProjectStructure.getDirectoriesState();
@@ -108,6 +109,7 @@ public class StorageStructureServiceImpl implements StorageStructureService {
         addFileChanges(filesState, filesContent , latestVersion , projectId ,userId);
     }
 
+    @Transactional
     private void merge(ProjectStructure newProjectStructure, ProjectStructure latestProjectStructure, Version parentVersion ) {
         Map<String, List<String>> fileLinesMap = findLatestFilesVersion(parentVersion.getProjectId() , parentVersion.getVersionNumber())
                 .stream()
@@ -118,7 +120,7 @@ public class StorageStructureServiceImpl implements StorageStructureService {
                 ));
 
         for(Map.Entry<String, List<String>> entry : newProjectStructure.getFilesContents().entrySet()){
-            List<Integer> changedLines = compareTwoFiles(entry.getValue() , fileLinesMap.get(entry.getKey()));
+            List<Integer> changedLines = compareTwoFiles(fileLinesMap.get(entry.getKey()), entry.getValue());
             List<String> mergeTwoFiles = mergeFiles(latestProjectStructure.getFilesContents().get(entry.getKey()), entry.getValue() , changedLines);
             entry.setValue(mergeTwoFiles);
         }
@@ -129,12 +131,20 @@ public class StorageStructureServiceImpl implements StorageStructureService {
         return this.directoryRepository.findById(id).orElseThrow(() -> new DirectoryNotFoundException("directory not found"));
     }
 
+    @Transactional
     @Override
     public List<String> mergeFiles(List<String> latestVersionLines, List<String> newVersionLines , List<Integer> changedLines) {
-        List<String> merged = new ArrayList<>(latestVersionLines);
+        List<String> merged;
+        if(latestVersionLines == null){
+            return newVersionLines;
+        }
+        else{
+            merged = new ArrayList<>(latestVersionLines);
+        }
 
         for (Integer lineIndex : changedLines) {
             // Ensure index is within bounds
+            lineIndex -=1;
             if (lineIndex >= 0 && lineIndex < newVersionLines.size()) {
                 if (lineIndex < merged.size()) {
                     // Replace existing line
@@ -152,7 +162,9 @@ public class StorageStructureServiceImpl implements StorageStructureService {
     @Override
     public List<Integer> compareTwoFiles(List<String> latestVersionLines, List<String> newVersionLines) {
         List<Integer> changedLines = new ArrayList<>();
-
+        if(latestVersionLines == null){
+            return changedLines;
+        }
         int maxLength = Math.max(latestVersionLines.size(), newVersionLines.size());
 
         for (int i = 0; i < maxLength; i++) {
@@ -177,13 +189,13 @@ public class StorageStructureServiceImpl implements StorageStructureService {
         StringBuilder result = new StringBuilder();
 
         for (Integer lineNumber : conflicts) {
-            String oldLine = lineNumber < oldFile.size() ? oldFile.get(lineNumber) : "";
-            String latestLine = lineNumber < latestFile.size() ? latestFile.get(lineNumber) : "";
-            String newLine = lineNumber < newFile.size() ? newFile.get(lineNumber) : "";
+            String oldLine = lineNumber - 1 < oldFile.size() ? oldFile.get(lineNumber - 1) : "";
+            String latestLine = lineNumber - 1 < latestFile.size() ? latestFile.get(lineNumber -1) : "";
+            String newLine = lineNumber - 1< newFile.size() ? newFile.get(lineNumber - 1) : "";
 
             // Only add conflict if both changed and to different content
             if (!Objects.equals(latestLine, newLine)) {
-                result.append("Conflict at line ").append(lineNumber + 1).append(":\n");
+                result.append("Conflict at line ").append(lineNumber).append(":\n");
                 result.append("OLD    : ").append(oldLine).append("\n");
                 result.append("LATEST : ").append(latestLine).append("\n");
                 result.append("NEW    : ").append(newLine).append("\n\n");
@@ -194,6 +206,8 @@ public class StorageStructureServiceImpl implements StorageStructureService {
 
     }
 
+
+    @Transactional
     private void addDirectoryChanges(Version latestVersion, String projectId, String userId,  LinkedHashMap<String, State> directoriesState) throws DirectoryNotFoundException {
         for(Map.Entry<String, State> entry : directoriesState.entrySet()){
             Directory directory = this.directoryRepository.findTopDirectoryInProjectByPath(projectId, latestVersion.getVersionNumber(), entry.getKey()).orElse(null);
@@ -209,8 +223,11 @@ public class StorageStructureServiceImpl implements StorageStructureService {
                 else{
                     Path subDirectoryPath = Paths.get(entry.getKey());
                     Path parent = subDirectoryPath.getParent();
-                    Directory parentDirectory = this.directoryRepository.findTopDirectoryInProjectByPath(projectId, latestVersion.getVersionNumber(),parent.toString()).orElse(null);
-                    parentId = parentDirectory.getParentDirectoryId();
+                    if(parent == null){
+                        continue;
+                    }
+                    Directory parentDirectory = this.directoryRepository.findTopDirectoryInProjectByPath(projectId, latestVersion.getVersionNumber(),parent.toString() + "\\").orElse(null);
+                    parentId = parentDirectory.getId();
                 }
                 Directory newDirectory = createDirectory(latestVersion.getVersionNumber() , latestVersion.getId(), entry.getKey(), projectId, userId , parentId,
                         false);
@@ -218,6 +235,7 @@ public class StorageStructureServiceImpl implements StorageStructureService {
         }
     }
 
+    @Transactional
     private void addFileChanges(Map<String, State> filesState , Map<String , List<String>> filesContent, Version latestVersion, String projectId, String userId ) throws FileAlreadyExistsException, DirectoryNotFoundException {
         for(Map.Entry<String, State> entry : filesState.entrySet()){
             File file = this.fileRepository.findTopFileInProjectByPath(projectId, latestVersion.getVersionNumber(), entry.getKey()).orElse(null);
@@ -229,8 +247,8 @@ public class StorageStructureServiceImpl implements StorageStructureService {
                 if(entry.getValue() == State.NEW){
                     Path subDirectoryPath = Paths.get(entry.getKey());
                     Path parent = subDirectoryPath.getParent();
-                    Directory parentDirectory = this.directoryRepository.findTopDirectoryInProjectByPath(projectId, latestVersion.getVersionNumber(),parent.toString()).orElse(null);
-                    parentId = parentDirectory.getParentDirectoryId();
+                    Directory parentDirectory = this.directoryRepository.findTopDirectoryInProjectByPath(projectId, latestVersion.getVersionNumber(),parent.toString() + "\\").orElse(null);
+                    parentId = parentDirectory.getId();
                 }
                 else{
                     parentId = file.getParentDirectoryId();

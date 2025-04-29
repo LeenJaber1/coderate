@@ -40,6 +40,12 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
 
+    @Override
+    public boolean canEnterSessions(String projectId, String userId) throws ProjectNotFoundException {
+        Project project = getProjectById(projectId);
+        return project.getUsersRoles().containsKey(userId);
+    }
+
     @Transactional
     @Override
     public Project createProject(String projectName, ProgramLanguage language, User owner) throws DirectoryNotFoundException {
@@ -48,19 +54,19 @@ public class ProjectServiceImpl implements ProjectService {
         Version version = this.versionService.createNewVersion(null , owner.getId(), project.getId(), 1);
         version.setRoot(true);
         this.versionService.saveVersion(version);
-        Directory mainDirectory = this.storageStructureService.createDirectory(1 , version.getId() , projectName + '\\' , project.getId(),
+        Directory mainDirectory = this.storageStructureService.createDirectory(1 , version.getId() , projectName  , project.getId(),
                 owner.getId(), "" , true);
         project.setCurrentVersion(version);
         project.getVersionUserOn().put(owner.getId(), version.getVersionNumber());
         project.setMainDirectoryId(mainDirectory.getId());
         updateNewVersion(project);
+        this.projectRepository.save(project);
         return project;
     }
 
     @Transactional
     private void updateNewVersion(Project project){
         project.setLatestVersion(project.getLatestVersion() + 1);
-        this.projectRepository.save(project);
     }
 
     @Transactional
@@ -125,7 +131,9 @@ public class ProjectServiceImpl implements ProjectService {
         Project project = getProjectById(projectId);
         project.getVersionUserOn().put(userId , versionNumber);
         this.projectRepository.save(project);
-        return this.storageStructureService.getProjectStructure(projectId , project.getLatestVersion());
+        ProjectStructure projectStructure = this.storageStructureService.getProjectStructure(projectId , versionNumber);
+        projectStructure.setProjectName(project.getProjectName());
+        return projectStructure;
     }
 
     @Override
@@ -166,6 +174,7 @@ public class ProjectServiceImpl implements ProjectService {
 
         newVersion.setMessage(message);
         project.setCurrentVersion(newVersion);
+        project.getVersionUserOn().put(userId, newVersion.getVersionNumber());
         this.versionService.saveVersion(newVersion);
         this.projectRepository.save(project);
 
@@ -265,6 +274,11 @@ public class ProjectServiceImpl implements ProjectService {
         copyProjectFiles(project, clone);
         this.projectRepository.save(clone);
         return clone;
+    }
+
+    @Override
+    public List<Project> getProjectsByUserId(String userId) {
+        return this.projectRepository.findByUserIdInUsersRoles(userId);
     }
 
     private void copyProjectMetaData(Project original , Project clone, User user){

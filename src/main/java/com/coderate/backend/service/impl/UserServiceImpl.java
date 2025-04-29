@@ -46,9 +46,14 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public void createUser(String displayName, String username, String email) {
-        User user = new User(displayName, username, email);
-        userRepository.save(user);
+    public void createUser(String displayName, String username, String email) throws Exception {
+        try{
+            User user = getUserByEmail(email);
+        }
+        catch (Exception e){
+            User user = new User(displayName, username, email);
+            userRepository.save(user);
+        }
     }
 
     @Override

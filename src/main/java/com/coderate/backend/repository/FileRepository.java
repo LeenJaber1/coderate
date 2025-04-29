@@ -40,7 +40,7 @@ public interface FileRepository extends MongoRepository<File , String> {
     List<File> findByProjectIdAndVersionNumber(String projectId, Integer versionNumber);
 
     @Aggregation(pipeline = {
-            "{ '$match': { 'projectId': ?0, 'versionNumber': { '$lt': ?1 }, 'path': ?2 } }",  // Match by projectId, versionNumber less than the given one, and specific path
+            "{ '$match': { 'projectId': ?0, 'versionNumber': { '$lte': ?1 }, 'path': ?2 } }",  // Match by projectId, versionNumber less than the given one, and specific path
             "{ '$sort': { 'versionNumber': -1 } }",  // Sort by versionNumber in descending order
             "{ '$limit': 1 }"  // Limit to only the top result
     })

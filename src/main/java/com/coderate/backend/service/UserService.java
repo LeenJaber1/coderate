@@ -13,7 +13,7 @@ public interface UserService extends UserDetailsService {
 
     void createUser(String displayName, String username, String password, String email) throws Exception;
 
-    void createUser(String displayName, String username, String email);
+    void createUser(String displayName, String username, String email) throws Exception;
 
     void updateUser(String username, User user) throws Exception;
 
